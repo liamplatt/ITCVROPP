@@ -1,0 +1,20 @@
+
+<launch>
+
+ <remap from="move_base/current_goal" to="move_base_simple/goal" />
+
+  <node pkg="move_base" type="move_base" name="move_base" respawn="false" output="screen">
+	
+	<param name="base_global_planner" value="global_planner/GlobalPlanner"/>
+	<rosparam file="$(find wallie_one)/costmap_common_params_zed.yaml" command="load" ns="global_costmap"/>
+        <rosparam file="$(find wallie_one)/costmap_common_params_zed.yaml" command="load" ns="local_costmap" />
+	<rosparam file="$(find wallie_one)/costmap_local_params_zed.yaml" command="load" />
+        <rosparam file="$(find wallie_one)/costmap_global_params.yaml" command="load" />
+	<rosparam file="$(find wallie_one)/base_local_planner_params.yaml" command="load" />
+        <rosparam file="$(find wallie_one)/global_planner_params.yaml" command="load" />
+	<remap from="/odom" to="/zed/zed_nodelet/odom" />
+
+  </node>
+
+
+</launch>

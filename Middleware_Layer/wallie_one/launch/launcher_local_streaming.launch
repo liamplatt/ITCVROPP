@@ -1,0 +1,81 @@
+
+<launch>
+	<arg name="compressed" default="false"/>
+	<arg name="stereo" default="false"/>
+	<arg name="point_cloud_topic" default="/zed/cloud_map"/>
+	<arg name="stereo_namespace" default="/zed/zed_node"/>
+	<arg name="frame_id" default="base_link"/> 
+	<arg name="stream"               default="192.168.1.110:30000" />
+  	<arg unless="$(arg stereo)" name="subscribe_rgbd"  default="true"/>
+
+	<node pkg="wallie_one" type="zed_sub_stereo" name="zed_stereo_node" output="screen" >
+		<param name="point_cloud_topic" type="string" value="$(arg point_cloud_topic)" />
+		<param name="image_topic" type="string" value="image_rect_color" />
+		<param name="stereo_namespace" type="string" value="$(arg stereo_namespace)" />
+
+   	</node>  
+
+	<node pkg="wallie_one" type="pcl_reader_no_imagew" name="pcl_reader_no_imagew" output="screen"  launch-prefix="xterm -e gdb --args">
+		<param name="info_topic" type="string" value="$(arg stereo_namespace)" />
+   	</node> 
+
+	<node pkg="wallie_one" type="pcl_processer" name="pcl_processer" output="screen" launch-prefix="xterm -e gdb --args">
+		<param name="info_topic" type="string" value="$(arg stereo_namespace)" />
+	
+   	</node> 
+	<node pkg="wallie_one" type="pcl_buffer" name="pcl_buffer_node" output="screen" >
+		<param name="point_cloud_topic" type="string" value="$(arg point_cloud_topic)" />
+   	</node> 
+
+   	<node pkg="rqt_reconfigure" type="rqt_reconfigure" name="rqt_reconfigure_node" output="screen" >
+
+   	</node> 
+
+
+ 	<node pkg="wallie_one" type="pcl_transformer.py" name="pcl_transformer" output="screen">
+
+
+   	</node>
+
+	<node pkg="wallie_one" type="image_buffer" name="image_buffer" output="screen">
+		<param name="stereo_namespace" type="string" value="$(arg stereo_namespace)" />
+   	</node>
+
+ 	<node pkg="wallie_one" type="TFBroadcaster.py" name="hmd_transform" output="screen">
+
+   	</node>
+
+ 	<node pkg="pointcloud_to_laserscan" type="pointcloud_to_laserscan_node" name="pointcloud_to_laserscan" output="screen">
+		<remap from="/cloud_in" to="/zed/cloud_obstacles"/>
+
+   	</node>
+
+	<node pkg="joy" type="joy_node" name="joy_node" output="screen">
+		<arg name="autorepeat_rate" value="10.0" />
+
+   	</node>
+
+	
+	<node pkg="wallie_one" type="image_loader" name="image_loader" output="screen">
+
+   	</node>
+	<node pkg="rtabmap_ros" type="point_cloud_assembler" name="point_cloud_assembler" output="screen">
+		<param name="max_cloud" type="int" value="200" />
+
+   	</node>
+
+	<include file="$(find darknet_ros)/launch/yolo_v3.launch">
+		<rosparam command="load" ns="darknet_ros" file="$(find wallie_one)/config/yolo/darknet_zed.yaml"/>
+	</include>
+	<include file="$(find zed_rtabmap_example)/launch/zed_rtabmap.launch">
+		<arg name="stream" value="$(arg stream)" />
+	</include>
+
+	<node name="left_throttler" type="throttle" pkg="topic_tools" args="messages /zed/zed_node/right/image_rect_color 1 /zed/zed_node/right/image_rect_color_throttled" />
+
+	<node name="right_throttler" type="throttle" pkg="topic_tools" args="messages /zed/zed_node/left/image_rect_color 1 /zed/zed_node/left/image_rect_color_throttled" />
+
+
+  	
+	
+</launch>

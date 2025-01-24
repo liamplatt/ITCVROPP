@@ -1,0 +1,139 @@
+
+<launch>
+	<arg name="compressed" default="false"/>
+	<arg name="stereo" default="false"/>
+ 	<arg name="stream"               default="192.168.1.110:30000" /> <!-- <arg name="stream" default="<ip_address>:<port>"> -->
+        <arg name="zed_node_name"        default="zed_nodelet" />
+        <arg name="camera_model"         default="zed2" />
+        <arg name="publish_urdf"         default="true" />
+        <arg name="camera_name"          default="zed" />
+        <arg name="fps"          default="30" />
+        <arg name="base_frame"           default="base_link" />
+        <arg name="image_name"           default="image_rect_color" />
+	<arg name="point_cloud_topic" default="/zed/zed_nodelet/mapping/fused_cloud"/>
+	<arg name="stereo_namespace" default="/zed/zed_nodelet"/>
+	<arg name="frame_id" default="zed_base_link"/>
+  	<arg if="$(arg stereo)" name="subscribe_rgbd"  default="false"/>
+  	<arg unless="$(arg stereo)" name="subscribe_rgbd"  default="true"/>
+	<arg name="svo_file"             default="" /> <!-- <arg name="svo_file" default="path/to/svo/file.svo"> -->
+	   
+	<node pkg="wallie_one" type="zed_sub_stereo" name="zed_stereo_node" output="screen"  >
+		<param name="point_cloud_topic" type="string" value="$(arg point_cloud_topic)" />	
+
+		<param name="image_topic" type="string" value="$(arg image_name)" />
+
+		<param name="stereo_namespace" type="string" value="$(arg stereo_namespace)" />
+
+   	</node>  
+
+	<node pkg="wallie_one" type="pcl_processer" name="pcl_processer" output="screen"  launch-prefix="xterm -e gdb --args">
+		<param name="info_topic" type="string" value="$(arg stereo_namespace)" />
+	
+   	</node> 
+
+	<node pkg="wallie_one" type="pcl_reader_no_imagew" name="pcl_reader_no_imagew" output="screen" >
+		<param name="info_topic" type="string" value="$(arg stereo_namespace)" />
+	
+   	</node> 
+	<node pkg="wallie_one" type="pcl_buffer" name="pcl_buffer_node" output="screen" >
+
+
+		<param name="point_cloud_topic" type="string" value="$(arg point_cloud_topic)" />
+		<param name="registered_point_cloud_topic" type="string" value="/zed/zed_nodelet/point_cloud/cloud_registered" />
+
+	</node> 
+
+
+   	<node pkg="rqt_reconfigure" type="rqt_reconfigure" name="rqt_reconfigure_node" output="screen" >
+
+   	</node> 
+
+ 	<node pkg="wallie_one" type="TFBroadcaster.py" name="hmd_transform" output="screen">
+
+
+   	</node>
+
+
+ 	<node pkg="wallie_one" type="pcl_transformer.py" name="pcl_transformer" output="screen">
+
+
+   	</node>
+
+	<node pkg="pointcloud_to_laserscan" type="pointcloud_to_laserscan_node" name="pointcloud_to_laserscan" output="screen">
+		<remap from="/cloud_in" to="/zed/zed_nodelet/point_cloud/cloud_registered"/>
+
+	</node>
+
+	<node pkg="joy" type="joy_node" name="joy_node" output="screen">
+
+   	</node>
+
+
+	<node pkg="wallie_one" type="image_loader" name="image_loader" output="screen">
+
+   	</node>
+
+
+	<node pkg="pcl_ros" type="convert_pointcloud_to_image" name="pointcloud_to_image_right" output="screen">
+
+		<remap from="/input" to="/pc_buffer_right" />
+   	</node>
+
+	  <node pkg="octomap_server" type="octomap_server_node" name="octomap_server">
+		<param name="resolution" value="0.05" />
+		
+		<!-- fixed map frame (set to 'map' if SLAM or localization running!) -->
+		<param name="frame_id" type="string" value="map" />
+		
+		<!-- maximum range to integrate (speedup!) -->
+		<param name="sensor_model/max_range" value="5.0" />
+		
+		<!-- data source to integrate (PointCloud2) -->
+		<remap from="cloud_in" to="/zed/zed_nodelet/point_cloud/cloud_registered" />
+	
+	</node>
+
+	<include file="$(find wallie_one)/launch/move_base_zed.launch">
+	</include>
+
+	<include file="$(find darknet_ros)/launch/yolo_v3.launch">
+		<rosparam command="load" ns="darknet_ros" file="$(find wallie_one)/config/yolo/darknet_zed.yaml"/>
+	</include>
+
+  	<group ns="$(arg camera_name)">
+		<!-- ZED Wrapper Node-->
+		<include file="$(find zed_wrapper)/launch/include/zed_camera.launch.xml">
+			<arg name="fps"          default="$(arg fps)" />
+		    <arg name="camera_name"         value="$(arg camera_name)" />
+		    <arg name="svo_file"            value="$(arg svo_file)" />
+		    <arg name="stream"              value="$(arg stream)" />
+		    <arg name="node_name"           value="$(arg zed_node_name)" />
+		    <arg name="camera_model"        value="$(arg camera_model)" />
+		    <arg name="base_frame"          value="$(arg base_frame)" />
+		    <arg name="publish_urdf"        value="$(arg publish_urdf)" />
+		    <!-- Position respect to base frame (i.e. "base_link"/roomba) -->
+		    <!-- Zed uses right hand ref. frame with z facing down! -->
+		    <arg name="cam_pos_x"             default="0.12" />
+		    <arg name="cam_pos_y"             default="0.0" />
+
+		    <arg name="cam_pos_z"             default="0.365" />
+		</include>    
+	  
+    	</group>
+	<node name="left_throttler" type="throttle" pkg="topic_tools" args="messages /zed/zed_nodelet/left/image_rect_color 1 /zed/zed_nodelet/left/image_rect_color_throttled" />
+
+	<node name="right_throttler" type="throttle" pkg="topic_tools" args="messages /zed/zed_nodelet/right/image_rect_color 1 /zed/zed_nodelet/right/image_rect_color_throttled" />
+
+		<node type="point_cloud2_assembler" pkg="laser_assembler" name="my_assembler">
+			<remap from="cloud" to="/zed/zed_nodelet/point_cloud/cloud_registered"/>
+			<param name="max_clouds" type="int" value="400" />
+			<param name="fixed_frame" type="string" value="map" />
+		</node>
+        <node name="rviz" pkg="rviz" type="rviz" args="-d $(find wallie_one)/rviz/zed-mapping.rviz" output="screen" /> 
+   	
+	<node pkg="wallie_one" type="image_buffer" name="image_buffer" output="screen" launch-prefix="xterm -e gdb --args">
+		<param name="stereo_namespace" type="string" value="$(arg stereo_namespace)" />
+
+   	</node>
+	
+</launch>

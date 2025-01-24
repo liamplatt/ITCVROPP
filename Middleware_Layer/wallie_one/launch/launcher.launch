@@ -1,0 +1,71 @@
+
+<launch>
+	<arg name="compressed" default="true"/>
+	<arg name="stereo" default="true"/>
+	<arg name="frame_id" default="camera_link"/>
+	<arg name="point_cloud_topic" default="/rtabmap/cloud_map"/>
+	<arg name="stereo_namespace" default="/camera/zed_nodelet"/>
+	<node pkg="wallie_one" type="zed_sub_stereo" name="zed_stereo_node" output="screen" >
+		
+		<param name="point_cloud_topic" type="string" value="$(arg point_cloud_topic)" />
+		<param name="stereo_namespace" type="string" value="$(arg stereo_namespace)" />
+		<param name="image_topic" type="string" value="image_rect_color_relay" />
+
+
+ 	</node>  
+
+	<node pkg="wallie_one" type="pcl_reader_no_imagew" name="pcl_reader_no_imagew" output="screen" >
+		<param name="info_topic" type="string" value="/camera/zed_nodelet" />
+
+   	</node> 
+	<node pkg="wallie_one" type="pcl_buffer" name="pcl_buffer_node" output="screen" >
+		<param name="info_topic" type="string" value="/camera/zed_nodelet" />
+		<param name="point_cloud_topic" type="string" value="$(arg point_cloud_topic)" />
+
+   	</node> 
+   	<node pkg="rqt_reconfigure" type="rqt_reconfigure" name="rqt_reconfigure_node" output="screen" >
+
+   	</node> 
+ 	<node pkg="wallie_one" type="pcl_transformer.py" name="blank_image_pub" output="screen">
+   	</node> 
+
+ 	<node pkg="wallie_one" type="TFBroadcaster.py" name="hmd_transform" output="screen">
+   	</node>
+
+ 	<node pkg="joy" type="joy_node" name="joy_node" output="screen">
+		<arg name="autorepeat_rate" value="5.0" />
+   	</node>
+
+  	<node pkg="multi_object_tracking_lidar" type="kf_tracker" name="kf_tracking" output="screen" >
+		<remap from="/pc_roi" to="/filtered_cloud"/>
+   	</node> 
+
+	<include file="$(find wallie_one)/launch/move_base.launch">
+		
+	</include>
+  	<arg if="$(arg stereo)" name="subscribe_rgbd"  default="false"/>
+  	<arg unless="$(arg stereo)" name="subscribe_rgbd"  default="true"/>
+	<include file="$(find rtabmap_ros)/launch/rtabmap.launch">
+			
+		
+		<arg name="visual_odometry" value="$(arg stereo)" />
+		<arg name="approx_sync" value="true" />
+		<arg name="frame_id" value="$(arg frame_id)"  />
+		<arg name="stereo_namespace" value="$(arg stereo_namespace)" />
+		<arg name="compressed" value="$(arg compressed)" />
+		<arg name="stereo" value="$(arg stereo)" />
+		<arg name="subscribe_rgbd" value="$(arg subscribe_rgbd)"/>
+
+		<arg name="rtabmap_args" value="--delete_db_on_start" />
+	</include>
+	
+	<node pkg="tf" type="static_transform_publisher" name="base_link_to_camera_link" args="0 0 0.1 0 0 0 camera_link base_link 100"/>
+
+ 	<node pkg="pointcloud_to_laserscan" type="depthimage_to_laserscan" name="depth2laserscan" output="screen">
+		<remap from="/cloud_in" to="/rtabmap/cloud_obstacles"/>
+
+   	</node>
+
+        <node name="rviz" pkg="rviz" type="rviz" args="-d $(find wallie_one)/rviz/zed-rtabmap.rviz" output="screen" /> 
+   	
+</launch>

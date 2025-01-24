@@ -1,0 +1,25 @@
+
+<launch>
+
+<arg name="map" default="/zed/map"/>
+<arg name="odom_frame" default="odom"/>
+ <remap from="map" to="$(arg map)" />
+ <remap from="move_base/current_goal" to="move_base_simple/goal" />
+
+  <node pkg="move_base" type="move_base" name="move_base" respawn="false" output="screen" launch-prefix="xterm -e gdb --args" >
+	
+	<param name="base_global_planner" value="global_planner/GlobalPlanner"/>
+	<rosparam file="$(find wallie_one)/costmap_common_params.yaml" command="load" ns="global_costmap"/>
+        <rosparam file="$(find wallie_one)/costmap_common_params.yaml" command="load" ns="local_costmap" />
+	<rosparam file="$(find wallie_one)/costmap_local_params.yaml" command="load" />
+        <rosparam file="$(find wallie_one)/costmap_global_params.yaml" command="load" />
+	<rosparam file="$(find wallie_one)/base_local_planner_params.yaml" command="load" />
+        <rosparam file="$(find wallie_one)/global_planner_params.yaml" command="load" />
+	<remap from="/odom" to="/rtabmap/odom" />
+
+
+
+  </node>
+
+
+</launch>
