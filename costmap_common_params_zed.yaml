@@ -1,0 +1,22 @@
+obstacle_range: 0.5
+raytrace_range: 0.5
+footprint: [[-0.14, -0.14], [-0.14, 0.14], [0.14, 0.14], [0.14, -0.14]]
+map_topic: /projected_map
+subscribe_to_updates: true
+global_frame: map
+robot_base_frame: zed_base_link
+update_frequency: 20
+publish_frequency: 5
+rolling_window: false
+
+plugins:
+  - {name: static_layer, type: "costmap_2d::StaticLayer"}
+  - {name: inflation_layer, type: "costmap_2d::InflationLayer"}
+
+static_layer:
+  map_topic: /map
+  subscribe_to_updates: false
+
+
+inflation_layer:
+  inflation_radius: 0.2
