@@ -1,0 +1,148 @@
+
+#include <ros/ros.h>
+#include <cv_bridge/cv_bridge.h>
+#include <dynamic_reconfigure/server.h>
+#include <wallie_one/ZedPubStereoConfig.h>
+#include <camera_info_manager/camera_info_manager.h>
+#include <tf/transform_listener.h>
+#include <sensor_msgs/image_encodings.h>
+#include <sensor_msgs/CameraInfo.h>
+#include <sensor_msgs/Image.h>
+#include <geometry_msgs/Point.h>
+#include <sensor_msgs/PointCloud2.h>
+
+#include <image_transport/subscriber_filter.h>
+#include <message_filters/sync_policies/approximate_time.h>
+#include <message_filters/synchronizer.h>
+#include <message_filters/time_synchronizer.h>
+#include <message_filters/subscriber.h>
+#include <image_transport/image_transport.h>
+
+#include <zed_interfaces/Object.h>
+#include <zed_interfaces/ObjectsStamped.h>
+#include <zed_interfaces/BoundingBox2Di.h>
+
+#include <opencv2/highgui/highgui.hpp>
+#include <opencv2/imgproc.hpp>
+#include <opencv2/imgcodecs.hpp>
+#include <opencv2/core/hal/interface.h>
+
+#include <boost/thread/mutex.hpp>
+#include <string>
+#include <math.h>
+#include <vector>
+#include <malloc.h>
+#include <memory.h>
+#include <chrono>
+#include <iostream>
+#include <sys/time.h>
+#include <ctime>
+#include <cmath>
+
+#include <pcl/point_cloud.h>
+#include <pcl_conversions/pcl_conversions.h>
+#include <pcl/point_cloud.h>
+
+using namespace cv;
+class PositionTracker
+{
+	
+	public:
+		ros::NodeHandle n, camera_nh;
+		pcl::PointCloud<pcl::PointXYZRGB> cloudInL,cloudInR;
+		pcl::PointCloud<pcl::PointXYZRGB> cloudOut;
+		ros::Subscriber camInfoL;
+		ros::Subscriber camInfoR;
+		sensor_msgs::CameraInfoPtr cameraInfo;
+		cv_bridge::CvImagePtr depData, stereo_frame, depth_frame;
+		ros::Subscriber subPCL, subStereo, subDepth;
+		ros::Subscriber objects;
+		ros::Publisher pcl_pubL, pcl_pubR;
+		image_transport::ImageTransport it;
+		sensor_msgs::CameraInfoPtr camera_info;
+		sensor_msgs::PointCloud2 out1, out2;
+		std::string camera_name;
+		image_transport::CameraPublisher stereo_pub;
+		boost::mutex mutex;
+		bool pnts_def = false;
+		bool PCLAvailable = false;
+		bool S = false;
+	public:
+	PositionTracker()
+	:
+	n("~"),
+	camera_nh("stereo_pc"),
+	it(n)
+	{
+		camInfoL = n.subscribe("/zed2/zed_node/left_raw/camera_info", 10, &ZED_PCL::camInfoLeftCB, this);
+		camInfoR = n.subscribe("/zed2/zed_node/right_raw/camera_info", 10, &ZED_PCL::camInfoRightCB, this);
+		//objects = n.subscribe("/zed2/zed_node/obj_det/objects", 10, &ZED_PCL::objectCB, this);
+		camera_info = boost::make_shared< sensor_msgs::CameraInfo >();
+		subPCL = n.subscribe("/zed2/zed_node/point_cloud/cloud_registered", 10, &ZED_PCL::PointCloudCB, this);
+		stereo_pub = it.advertiseCamera("/stereo/img_pnts",1);
+		//subStereo = n.subscribe("stereo/image_raw", 10, &ZED_PCL::stereoCallback, this);
+		//subDepth = n.subscribe("/zed2/zed_node/depth/depth_registered", 10, &ZED_PCL::depthCallback, this);
+		pcl_pubL = n.advertise<sensor_msgs::PointCloud2>("pcl_left",1);
+		pcl_pubR = n.advertise<sensor_msgs::PointCloud2>("pcl_right",1);
+	}
+	void camInfoRightCB(const sensor_msgs::CameraInfo camInfo)
+	{
+		std::printf("Cam Info Right CB\n");
+		RP = camInfo.P;
+		for(int i = 0; i < RP.size();i++){
+			std::printf("%f\n",RP.at(i));
+		}
+	}
+	void camInfoLeftCB(const sensor_msgs::CameraInfo camInfo)
+	{
+		std::printf("Cam Info Left CB\n");
+		LP = camInfo.P;
+	}
+	/**
+    Function to convert 2D pixel point to 3D point by extracting point
+    from PointCloud2 corresponding to input pixel coordinate. This function
+    can be used to get the X,Y,Z coordinates of a feature using an 
+    RGBD camera, e.g., Kinect.
+    */
+    void pixelTo3DPoint(const sensor_msgs::PointCloud2 pCloud, const int u, const int v, geometry_msgs::Point &p)
+    {
+		return;
+    }
+	void PointCloudCB(const sensor_msgs::PointCloud2 &in)
+	{
+		//Convert ros msg to pcl lib point-cloud
+		std::printf("PC callback\n");
+		pcl::fromROSMsg(in, cloudInL);
+		pcl::fromROSMsg(in, cloudInR);
+		PCLAvailable = true;
+		
+		//cv::Vec3b r(cloudIn.points);
+		//For each point in point cloud transform using the right camera matrix LP and RP
+		for(size_t i = 0; i < cloudInL.points.size();i++)
+		{
+			cloudInL.points[i].x = LP.at(0)*cloudInL.points[i].x + LP.at(2)*cloudInL.points[i].y;
+			cloudInL.points[i].y = LP.at(5)*cloudInL.points[i].y + LP.at(6)*cloudInL.points[i].z;
+		}
+		for(size_t i = 0; i < cloudInR.points.size();i++)
+		{
+			cloudInR.points[i].x = RP.at(0)*cloudInR.points[i].x + RP.at(2)*cloudInR.points[i].y;
+			cloudInR.points[i].y = RP.at(5)*cloudInR.points[i].y + RP.at(6)*cloudInR.points[i].z;
+		}
+		pcl::toROSMsg(cloudInL,outL);
+		pcl::toROSMsg(cloudInR,outR);
+		pcl_pubL.publish(outL);
+		pcl_pubR.publish(outR);
+	}
+};
+
+int main(int argc, char** argv)
+{
+  	ros::init(argc, argv, "pcl_reader");
+	ZED_PCL ZPC;
+
+	while( ros::ok() )
+	{
+		ros::spin();
+	}
+  return 0;
+}

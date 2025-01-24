@@ -1,0 +1,25 @@
+
+
+<launch>
+  <arg name="base_frame" default="base_link"/>
+  <arg name="namespace" default = "zed2"/>
+  <include file="$(find create_bringup)/launch/create_2.launch" />
+
+   <node pkg="move_base" type="move_base" name="move_base_node" output="screen">
+        <param name="footprint_padding" value="0.01" />
+        <param name="controller_frequency" value="5.0" />
+        <param name="controller_patience" value="3.0" />
+        <param name="oscillation_timeout" value="30.0" />
+        <param name="oscillation_distance" value="0.5" />
+        <param name="max_planning_retries" value="20"/>
+        <param name="planner_patience" value="1" />
+        <param name="recovery_behavior_enabled" value="true" />
+        <rosparam file="$(find wallie_one_nav)/costmap_common_params.yaml" />
+        <rosparam file="$(find wallie_one_nav)/costmap_common_params.yaml" />
+        <rosparam file="$(find wallie_one_nav)/local_costmap_params.yaml" />
+        <rosparam file="$(find wallie_one_nav)/global_costmap_params.yaml" />
+        <rosparam file="$(find wallie_one_nav)/base_local_planner_params.yaml" />
+   </node>
+
+</launch>
+

@@ -1,0 +1,48 @@
+<launch>
+  <arg name="rate"        default="60"/>     <!-- Rate we want to publish over network -->
+  <arg name="approx_sync" default="false"/> <!-- false for zed camera -->
+  <arg name="resolution"  default="2"/>     <!-- Using VGA to use less bandwidth -->
+  <arg name="stereo_sync"   default="false"/>
+<include file="$(find create_bringup)/launch/create_2.launch" />
+<group ns="camera">
+    <node pkg="nodelet" type="nodelet" name="camera_nodelet_manager" args="manager" output="screen"/>
+	
+    <include file="$(find zed_wrapper)/launch/include/zed_camera_nodelet.launch">
+      <arg name="nodelet_manager_name" value="camera_nodelet_manager"/> 
+    </include>
+
+    <node pkg="tf" type="static_transform_publisher" name="camera_zed_link_1" args="0 0 0 0 0 0 camera_link zed_camera_center 100"/> 
+<node pkg="tf" type="static_transform_publisher" name="zed_link_right" args="0 0 0 0 0 0 zed_camera_center zed_right_camera_frame 100"/>
+<node pkg="tf" type="static_transform_publisher" name="zed_link_left" args="0 0 0 0 0 0 zed_camera_center zed_left_camera_frame 100"/>
+
+    
+    <!-- Use same nodelet used by ZED to avoid image serialization -->
+    <node if="$(arg stereo_sync)" pkg="nodelet" type="nodelet" name="stereo_sync" args="load rtabmap_ros/stereo_sync camera_nodelet_manager" output="screen">
+      <param name="compressed_rate"  type="double" value="$(arg rate)"/>
+      <param name="approx_sync"      type="bool"   value="$(arg approx_sync)"/>
+
+      <remap from="left/image_rect"   to="camera/zed_nodelet/left/image_rect_color"/>
+      <remap from="right/image_rect"  to="camera/zed_nodelet/right/image_rect_color"/>
+      <remap from="left/camera_info"  to="camera/zed_nodelet/left/camera_info"/>
+      <remap from="right/camera_info" to="camera/zed_nodelet/right/camera_info"/>
+
+      <remap from="rgbd_image"      to="rgbd_image"/>
+    </node>
+
+    <node unless="$(arg stereo_sync)" pkg="nodelet" type="nodelet" name="stereo_throttle" args="load rtabmap_ros/stereo_throttle camera_nodelet_manager" output="screen">
+      <param name="rate"         type="double" value="$(arg rate)"/>
+      <param name="approx_sync"  type="bool"   value="$(arg approx_sync)"/>
+
+      <remap from="left/image"        to="zed_nodelet/left/image_rect_color"/>
+      <remap from="right/image"       to="zed_nodelet/right/image_rect_color"/>
+      <remap from="left/camera_info"  to="zed_nodelet/left/camera_info"/>
+      <remap from="right/camera_info" to="zed_nodelet/right/camera_info"/>
+
+      <remap from="zed_nodelet/left/image_rect_color_throttle"  to="throttled/left/image_rect_color"/>
+      <remap from="zed_nodelet/right/image_rect_color_throttle" to="throttled/right/image_rect_color"/>
+      <remap from="zed_nodelet/left/camera_info_throttle"       to="throttled/left/camera_info"/>
+      <remap from="zed_nodelet/right/camera_info_throttle"      to="throttled/right/camera_info"/>
+    </node>
+  </group>   
+</launch>
+

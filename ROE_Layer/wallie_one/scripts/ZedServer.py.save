@@ -1,0 +1,40 @@
+#!/usr/bin/env python
+import numpy as np
+import math
+import socket
+import cv2
+import rospy
+from cv_bridge import CvBridge
+from std_msgs.msg import String
+from sensor_msgs.msg import Image
+from sensor_msgs.msg import PointCloud2
+
+
+
+
+class ImageRelay():
+    def __init__(self, topic):
+	self.image = None
+	self.br = CvBridge()
+	self.sub = rospy.Subscriber(topic, Image, self.image_cb)
+    	self.server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+	self.server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+	self.server.bind((socket.gethostname(), 5005))
+	self.server.listen(5)
+	print("Socket image publishing server started...")   def image_cb(self, msg):
+
+	(clientsock, client_address) = self.server.accept()
+	self.image = self.br.imgmsg_to_cv2(msg)
+	print(clientsock)
+	# Send the cv Mat image
+	h, w, c = self.image.shape
+	num_bytes = h*w*c*8 # 8 bits 0-255 values
+	clientsock.sendall(self.image.encode())
+
+def main():
+    rospy.init_node('ZedImageSocketPub',anonymous=True)
+    IR = ImageRelay("zed_node/right/image_rect_color")
+    rospy.spin()
+
+if __name__ == '__main__':
+    main()
